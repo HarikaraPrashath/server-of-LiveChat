@@ -17,7 +17,7 @@ app.use(express.json());
 // ---------------- In-memory state ----------------
 const rooms = new Map();        // roomId -> Set(ws)
 const clients = new Map();      // ws -> { id, username, roomId }
-const typingUsers = new Map();  // roomId -> Set(username)
+// const typingUsers = new Map();  // roomId -> Set(username)
 
 // ---------------- HTTP Routes ----------------
 app.get("/health", (req, res) => {
