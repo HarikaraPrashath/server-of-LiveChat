@@ -8,7 +8,14 @@ const { app, server, wss } = require("../server");
 let WebSocket;
 
 afterAll((done) => {
-  wss.close(() => server.close(done));
+  if (wss && wss.clients) {
+    for (const client of wss.clients) {
+      client.terminate();
+    }
+  }
+  wss.close(() => {
+    server.close(done);
+  });
 });
 
 describe("REST API", () => {
@@ -43,24 +50,38 @@ describe("WebSocket", () => {
     });
   }, 10000);
 
-  afterAll((done) => {
-    server.close(done);
-  });
-
   function connect() {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+      const messageQueue = [];
+      const pendingResolvers = [];
+
+      ws.on("message", (data) => {
+        const parsed = JSON.parse(data.toString());
+        if (pendingResolvers.length > 0) {
+          const resolveNext = pendingResolvers.shift();
+          resolveNext(parsed);
+        } else {
+          messageQueue.push(parsed);
+        }
+      });
+
+      ws.nextMessage = () => {
+        if (messageQueue.length > 0) {
+          return Promise.resolve(messageQueue.shift());
+        }
+        return new Promise((resolve) => {
+          pendingResolvers.push(resolve);
+        });
+      };
+
       ws.on("open", () => resolve(ws));
       ws.on("error", reject);
     });
   }
 
   function nextMessage(ws) {
-    return new Promise((resolve) => {
-      ws.once("message", (data) => {
-        resolve(JSON.parse(data.toString()));
-      });
-    });
+    return ws.nextMessage();
   }
 
   test("server sends CONNECTED", async () => {
@@ -91,10 +112,14 @@ describe("WebSocket", () => {
     ws1.send(JSON.stringify({ type: "JOIN", roomId: "room-1", username: "Bob" }));
     await nextMessage(ws1);
     ws2.send(JSON.stringify({ type: "JOIN", roomId: "room-1", username: "Carol" }));
-    await nextMessage(ws1);
-    await nextMessage(ws1);
+    await nextMessage(ws1); // SYSTEM (Bob joined)
+    await nextMessage(ws1); // MEMBERS_UPDATE (Bob joined)
+    await nextMessage(ws1); // SYSTEM (Carol joined)
+    await nextMessage(ws1); // MEMBERS_UPDATE (Carol joined)
     const join2 = await nextMessage(ws2);
     expect(join2.type).toBe("ROOM_JOINED");
+    await nextMessage(ws2); // SYSTEM (Carol joined)
+    await nextMessage(ws2); // MEMBERS_UPDATE (Carol joined)
     ws1.send(JSON.stringify({ type: "MESSAGE", text: "Hello world" }));
     const msg1 = await nextMessage(ws1);
     const msg2 = await nextMessage(ws2);

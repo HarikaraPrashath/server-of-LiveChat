@@ -1,7 +1,7 @@
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
-const { WebSocketServer } = require("ws");
+const { WebSocketServer, WebSocket } = require("ws");
 const { randomUUID: uuidv4 } = require("crypto");
 require("dotenv").config();
 
@@ -49,14 +49,14 @@ function broadcast(roomId, data, excludeWs = null) {
   const payload = JSON.stringify(data);
 
   room.forEach((ws) => {
-    if (ws !== excludeWs && ws.readyState === ws.OPEN) {
+    if (ws !== excludeWs && ws.readyState === WebSocket.OPEN) {
       ws.send(payload);
     }
   });
 }
 
 function send(ws, data) {
-  if (ws.readyState === ws.OPEN) {
+  if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(data));
   }
 }
