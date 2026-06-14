@@ -1,3 +1,7 @@
+jest.mock("../db/index", () => ({
+  query: jest.fn().mockResolvedValue({ rows: [] }),
+}));
+
 const request = require("supertest");
 const { app, server, wss } = require("../server");
 
@@ -119,7 +123,6 @@ describe("WebSocket", () => {
       })
     );
 
-    // ws1 receives SYSTEM + MEMBERS_UPDATE (ignore exact order safely)
     await nextMessage(ws1);
     await nextMessage(ws1);
 
