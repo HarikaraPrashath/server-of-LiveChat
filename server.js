@@ -2,10 +2,10 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const { WebSocketServer } = require("ws");
-const { v4: uuidv4 } = require("uuid");
+const { randomUUID: uuidv4 } = require("crypto");
 require("dotenv").config();
 
-const { saveMessage, getMessages,deleteRoomMessages } = require("./db/messages");
+const { saveMessage, getMessages, deleteRoomMessages } = require("./db/messages");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -15,13 +15,16 @@ app.use(cors({ origin: process.env.CLIENT_ORIGIN || "*" }));
 app.use(express.json());
 
 // ---------------- In-memory state ----------------
-const rooms = new Map();        // roomId -> Set(ws)
-const clients = new Map();      // ws -> { id, username, roomId }
-// const typingUsers = new Map();  // roomId -> Set(username)
+const rooms = new Map();
+const clients = new Map();
 
 // ---------------- HTTP Routes ----------------
 app.get("/health", (req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
+});
+
+app.get("/api/rooms", (req, res) => {
+  res.json(Array.from(rooms.keys()));
 });
 
 app.get("/api/rooms/:roomId/history", async (req, res) => {
@@ -191,44 +194,47 @@ wss.on("connection", (ws) => {
       );
       return;
     }
+
+    // ---------------- UNKNOWN ----------------
+    send(ws, { type: "ERROR", message: "Unknown message type" });
   });
 
   // ---------------- Disconnect ----------------
- ws.on("close", async () => {
-  const client = clients.get(ws);
-  if (!client) return;
+  ws.on("close", async () => {
+    const client = clients.get(ws);
+    if (!client) return;
 
-  const roomId = client.roomId;
+    const roomId = client.roomId;
 
-  if (roomId && rooms.has(roomId)) {
-    const room = rooms.get(roomId);
+    if (roomId && rooms.has(roomId)) {
+      const room = rooms.get(roomId);
 
-    room.delete(ws);
+      room.delete(ws);
 
-    // update members list
-    broadcast(roomId, {
-      type: "MEMBERS_UPDATE",
-      members: getRoomMembers(roomId),
-    });
+      broadcast(roomId, {
+        type: "MEMBERS_UPDATE",
+        members: getRoomMembers(roomId),
+      });
 
-    // 🔥 IF ROOM IS EMPTY → DELETE EVERYTHING
-    if (room.size === 0) {
-      rooms.delete(roomId);
+      if (room.size === 0) {
+        rooms.delete(roomId);
 
-      try {
-        await deleteRoomMessages(roomId);
-        console.log(`🧹 Deleted all messages in room: ${roomId}`);
-      } catch (err) {
-        console.error("Failed to delete room messages:", err.message);
+        try {
+          await deleteRoomMessages(roomId);
+          console.log(`🧹 Deleted all messages in room: ${roomId}`);
+        } catch (err) {
+          console.error("Failed to delete room messages:", err.message);
+        }
       }
     }
-  }
 
-  clients.delete(ws);
-});
+    clients.delete(ws);
+  });
 });
 
 // ---------------- Start ----------------
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
+
+module.exports = { app, server, wss };
