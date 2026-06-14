@@ -1,5 +1,5 @@
 const request = require("supertest");
-const { app, server, wss } = require("../src/server");
+const { app, server, wss } = require("../server");
 
 let WebSocket;
 
