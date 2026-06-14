@@ -9,6 +9,12 @@
     "test": "jest",
     "lint": "eslint ."
   },
+  "jest": {
+    "testEnvironment": "node",
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(uuid)/)"
+    ]
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -17,7 +23,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "pg": "^8.21.0",
-    "uuid": "^14.0.0",
+    "uuid": "^9.0.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
